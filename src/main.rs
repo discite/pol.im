@@ -22,7 +22,7 @@ async fn main() {
         .merge(web::routes_login::routes())
         .layer(middleware::map_response(main_response_mapper))
         .fallback_service(router_static());
-        
+         
 
 // region: --- Start Server 
     // Address that server will bind to.
