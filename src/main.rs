@@ -1,11 +1,19 @@
-use axum::{routing::{get, get_service}, Router, response::{Html, IntoResponse, Response}, extract::{Query, Path}, middleware};
+use axum::{
+    extract::{Path, Query},
+    middleware,
+    response::{Html, IntoResponse, Response},
+    routing::{get, get_service},
+    Router,
+};
 use serde::Deserialize;
+use std::net::SocketAddr;
+use tower_cookies::CookieManagerLayer;
 use tower_http::services::ServeDir;
-use std::{net::SocketAddr};
 
 pub use self::error::{Error, Result};
 
 mod error;
+mod model;
 mod web;
 
 #[tokio::main]
@@ -21,10 +29,10 @@ async fn main() {
         .merge(routes_hello())
         .merge(web::routes_login::routes())
         .layer(middleware::map_response(main_response_mapper))
+        .layer(CookieManagerLayer::new())
         .fallback_service(router_static());
-         
 
-// region: --- Start Server 
+    // region: --- Start Server
     // Address that server will bind to.
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("->> LISTENING on {addr}");
@@ -36,8 +44,7 @@ async fn main() {
         .await
         .unwrap();
 
-// endregion: --- Start Server
-
+    // endregion: --- Start Server
 }
 
 async fn main_response_mapper(res: Response) -> Response {
@@ -46,10 +53,9 @@ async fn main_response_mapper(res: Response) -> Response {
     res
 }
 
-
 #[derive(Debug, Deserialize)]
 struct HelloParams {
-    name: Option<String>
+    name: Option<String>,
 }
 
 fn router_static() -> Router {
@@ -62,7 +68,6 @@ fn routes_hello() -> Router {
     Router::new()
         .route("/hello", get(handler_hello))
         .route("/hello2/:name", get(handler_hello2))
-
 }
 
 // e.g. '/hello?name=discite'
