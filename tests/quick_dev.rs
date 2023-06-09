@@ -1,5 +1,3 @@
-#![allow(unused)] // For beginning only.
-
 use anyhow::Result;
 use serde_json::json;
 

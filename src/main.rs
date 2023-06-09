@@ -21,17 +21,14 @@ mod web;
 #[tokio::main]
 async fn main() -> Result<()> {
     let mc = ModelController::new().await?;
-    // Route all requests on "/" endpoint to anonymous handler.
-    //
-    // A handler is an async function which returns something that implements
-    // `axum::response::IntoResponse`.
 
-    // A closure or a function can be used as handler.
+    let routes_api = web::routes_ticket::routes(mc.clone())
+        .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth));
 
     let app = Router::new()
         .merge(routes_hello())
         .merge(web::routes_login::routes())
-        .nest("/api", web::routes_ticket::routes(mc.clone()))
+        .nest("/api", routes_api)
         .layer(middleware::map_response(main_response_mapper))
         .layer(CookieManagerLayer::new())
         .fallback_service(router_static());
