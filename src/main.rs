@@ -1,89 +1,46 @@
+use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+
 use axum::{
-    extract::{Path, Query},
-    middleware,
-    response::{Html, IntoResponse, Response},
-    routing::{get, get_service},
-    Router,
+    http::StatusCode, routing::get, Router,
+    extract::{TypedHeader},
+    headers::UserAgent,
 };
-use serde::Deserialize;
-use std::net::SocketAddr;
-use tower_cookies::CookieManagerLayer;
-use tower_http::services::ServeDir;
 
-use crate::model::ModelController;
+const DB_URL: &str = "sqlite://sqlite.db";
 
-pub use self::error::{Error, Result};
 
-mod error;
-mod model;
-mod web;
+async fn index(TypedHeader(user_agent): TypedHeader<UserAgent>) -> String {
+    String::from(user_agent.as_str()) 
+}
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let mc = ModelController::new().await?;
-
-    let routes_api = web::routes_ticket::routes(mc.clone())
-        .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth));
+async fn main() {
+    // SQLx create table using rust code
+    if !Sqlite::database_exists(DB_URL).await.unwrap_or(false) {
+        println!("Creating database {}", DB_URL);
+        match Sqlite::create_database(DB_URL).await {
+            Ok(_) => println!("Create db success"),
+            Err(error) => panic!("error: {}", error),
+        }
+    } else {
+        println!("Database already exists");
+    }
+    let db = SqlitePool::connect(DB_URL).await.unwrap();
+    let result = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS myposts (
+            post_id INTEGER PRIMARY KEY NOT NULL, 
+            post_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            post_title TEXT,
+            post_body TEXT
+        );"
+    ).execute(&db).await.unwrap();
+    println!("Create myposts table result: {:?}", result);
 
     let app = Router::new()
-        .merge(routes_hello())
-        .merge(web::routes_login::routes())
-        .nest("/api", routes_api)
-        .layer(middleware::map_response(main_response_mapper))
-        .layer(CookieManagerLayer::new())
-        .fallback_service(router_static());
+        .route("/", get(index));
 
-    // region: --- Start Server
-    // Address that server will bind to.
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("->> LISTENING on {addr}");
-
-    // Use `hyper::server::Server` which is re-exported through `axum::Server` to serve the app.
-    axum::Server::bind(&addr)
-        // Hyper server takes a make service.
+    axum::Server::bind(&"0.0.0.0:4000".parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
-
-    // endregion: --- Start Server
-
-    Ok(())
 }
-
-async fn main_response_mapper(res: Response) -> Response {
-    println!("->> {:<12} - main_response_mapper ", "RES_MAPPER");
-    println!();
-    res
-}
-
-#[derive(Debug, Deserialize)]
-struct HelloParams {
-    name: Option<String>,
-}
-
-fn router_static() -> Router {
-    Router::new().nest_service("/", get_service(ServeDir::new("./")))
-}
-
-// region:    --- Routers Hello
-
-fn routes_hello() -> Router {
-    Router::new()
-        .route("/hello", get(handler_hello))
-        .route("/hello2/:name", get(handler_hello2))
-}
-
-// e.g. '/hello?name=discite'
-async fn handler_hello(Query(params): Query<HelloParams>) -> impl IntoResponse {
-    println!("->> {:<12} - handler_hello - {params:?}", "HANDLER");
-    let name = params.name.as_deref().unwrap_or("World!");
-    Html(format!("Hello, <strong>{name}</strong>"))
-}
-
-// e.g. '/hello2/discite'
-async fn handler_hello2(Path(name): Path<String>) -> impl IntoResponse {
-    println!("->> {:<12} - handler_hello2 - {name:?}", "HANDLER");
-    Html(format!("Hello, <strong>{name}</strong>"))
-}
-
-// endregion:    --- Routers Hello
