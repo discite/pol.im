@@ -13,15 +13,16 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-
 # Added by cargo
-
-/target
 sqlite.db*
 
-
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target
+# Leptos
+dist
+pkg
+comparisons
+blob.rs
+.DS_Store
+.idea
+.direnv
+.envrc
+.vscode
